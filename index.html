@@ -1,0 +1,746 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="description" content="GUI for syncing and modifying Tech Tree Tower saves.">
+    <title>Tech Tree Tower - Save Sync Tool</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --primary: #6366f1;
+            --primary-hover: #4f46e5;
+            --bg: #0f172a;
+            --card-bg: rgba(30, 41, 59, 0.7);
+            --text: #f8fafc;
+            --text-muted: #94a3b8;
+            --border: rgba(255, 255, 255, 0.1);
+            --error: #ef4444;
+            --success: #22c55e;
+        }
+
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+
+        body {
+            font-family: 'Outfit', sans-serif;
+            background-color: var(--bg);
+            background-image: 
+                radial-gradient(at 0% 0%, rgba(99, 102, 241, 0.15) 0px, transparent 50%),
+                radial-gradient(at 100% 0%, rgba(236, 72, 153, 0.15) 0px, transparent 50%);
+            color: var(--text);
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            padding: 20px;
+        }
+
+        main {
+            width: 100%;
+            max-width: 500px;
+            backdrop-filter: blur(12px);
+            -webkit-backdrop-filter: blur(12px);
+            background: var(--card-bg);
+            border: 1px solid var(--border);
+            border-radius: 24px;
+            padding: 40px;
+            box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.5);
+            animation: fadeIn 0.6s ease-out;
+        }
+
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(20px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        header {
+            text-align: center;
+            margin-bottom: 32px;
+        }
+
+        h1 {
+            font-size: 2rem;
+            font-weight: 600;
+            background: linear-gradient(to right, #818cf8, #c084fc);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            margin-bottom: 8px;
+        }
+
+        p.subtitle {
+            color: var(--text-muted);
+            font-size: 0.95rem;
+        }
+
+        .form-group {
+            margin-bottom: 20px;
+        }
+
+        label {
+            display: block;
+            margin-bottom: 8px;
+            font-size: 0.9rem;
+            font-weight: 600;
+            color: var(--text-muted);
+        }
+
+        input {
+            width: 100%;
+            padding: 12px 16px;
+            background: rgba(15, 23, 42, 0.6);
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            color: var(--text);
+            font-family: inherit;
+            font-size: 1rem;
+            transition: all 0.3s ease;
+        }
+
+        input:focus {
+            outline: none;
+            border-color: var(--primary);
+            box-shadow: 0 0 0 2px rgba(99, 102, 241, 0.2);
+            background: rgba(15, 23, 42, 0.8);
+        }
+
+        button {
+            width: 100%;
+            padding: 14px;
+            background: var(--primary);
+            color: white;
+            border: none;
+            border-radius: 12px;
+            font-size: 1rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            gap: 8px;
+        }
+
+        button:hover {
+            background: var(--primary-hover);
+            transform: translateY(-1px);
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+        }
+
+        button:active {
+            transform: translateY(0);
+        }
+
+        button:disabled {
+            background: #475569;
+            cursor: not-allowed;
+            opacity: 0.7;
+        }
+
+        .status {
+            margin-top: 16px;
+            padding: 12px;
+            border-radius: 8px;
+            font-size: 0.9rem;
+            text-align: center;
+            display: none;
+        }
+
+        .status.error {
+            background: rgba(239, 68, 68, 0.1);
+            color: var(--error);
+            border: 1px solid rgba(239, 68, 68, 0.2);
+            display: block;
+        }
+
+        .status.success {
+            background: rgba(34, 197, 94, 0.1);
+            color: var(--success);
+            border: 1px solid rgba(34, 197, 94, 0.2);
+            display: block;
+        }
+
+        #data-section {
+            display: none;
+            margin-top: 32px;
+            border-top: 1px solid var(--border);
+            padding-top: 32px;
+        }
+
+        .editable-fields {
+            margin-bottom: 24px;
+        }
+
+        .loader {
+            width: 20px;
+            height: 20px;
+            border: 2px solid rgba(255, 255, 255, 0.3);
+            border-radius: 50%;
+            border-top-color: white;
+            animation: spin 0.8s linear infinite;
+            display: none;
+        }
+
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+
+        button.loading .loader {
+            display: inline-block;
+        }
+        button.loading .btn-text {
+            display: none;
+        }
+    </style>
+</head>
+<body>
+
+<main>
+    <header style="position: relative;">
+        <h1>The Tower Save Sync</h1>
+        <p class="subtitle">Modify cloud save data via REST API</p>
+        <div id="debug-status" style="font-size: 0.8rem; color: var(--text-muted); text-align: center; margin-top: 4px;"></div>
+        <button id="settings-toggle" style="position: absolute; top: 0; right: 0; width: auto; background: transparent; border: none; color: var(--text-muted); cursor: pointer; font-size: 1.2rem;">⚙️</button>
+    </header>
+
+    <section id="settings-section" style="display: none; margin-bottom: 20px; border-bottom: 1px solid var(--border); padding-bottom: 20px;">
+        <h2 style="font-size: 1.2rem; margin-bottom: 16px;">Settings</h2>
+        <div class="form-group">
+            <label for="settings-api-key">API Key</label>
+            <input type="text" id="settings-api-key" placeholder="AIzaSy...">
+        </div>
+        <div class="form-group">
+            <label for="settings-project-id">Project ID</label>
+            <input type="text" id="settings-project-id" placeholder="the-tower-...">
+        </div>
+        
+        <div class="form-group">
+            <label>Manage Users</label>
+            <div id="user-list" style="margin-bottom: 12px;"></div>
+            <div style="display: flex; gap: 8px;">
+                <input type="email" id="new-user-email" placeholder="new@example.com" style="flex: 2;">
+                <input type="password" id="new-user-password" placeholder="••••••••" style="flex: 2;">
+                <button id="add-user-btn" style="flex: 1; padding: 12px; font-size: 0.9rem;">Add</button>
+            </div>
+            <div id="add-user-status" class="status" style="margin-top: 8px;"></div>
+        </div>
+        
+        <button id="clear-all-btn" style="background: var(--error); margin-top: 16px;">Clear Everything</button>
+    </section>
+
+    <section id="auth-section">
+        <div class="form-group">
+            <label for="user-selector">Select User</label>
+            <select id="user-selector" style="width: 100%; padding: 12px; background: rgba(15, 23, 42, 0.6); border: 1px solid var(--border); border-radius: 12px; color: var(--text); font-family: inherit; font-size: 1rem;"></select>
+        </div>
+        <button id="login-btn">
+            <span class="loader"></span>
+            <span class="btn-text">Login</span>
+        </button>
+        <div id="auth-status" class="status"></div>
+    </section>
+
+    <section id="data-section">
+        <header style="text-align: left; margin-bottom: 16px;">
+            <h2 style="font-size: 1.2rem; font-weight: 600;">Player Data</h2>
+            <p class="subtitle" id="playfab-display">PlayFab ID: --</p>
+        </header>
+
+        <button id="fetch-btn" style="margin-bottom: 16px;">
+            <span class="loader"></span>
+            <span class="btn-text">Fetch Data</span>
+        </button>
+
+        <div class="editable-fields" id="fields-container" style="display: none;">
+            <!-- Configurable fields will be injected here -->
+        </div>
+
+        <button id="save-btn" style="display: none;">
+            <span class="loader"></span>
+            <span class="btn-text">Push to Firestore</span>
+        </button>
+
+        <button id="export-btn" style="display: none; margin-top: 12px; background: #475569;">
+            <span class="loader"></span>
+            <span class="btn-text">Export to JSON</span>
+        </button>
+        <div id="save-status" class="status"></div>
+    </section>
+</main>
+
+<script>
+    // Configuration & State
+    let API_KEY = localStorage.getItem('ttt_api_key') || '';
+    let PROJECT_ID = localStorage.getItem('ttt_project_id') || '';
+    
+    // Configurable Fields (User can add more here)
+    const CONFIGURABLE_FIELDS = ['Coins', 'SaveRevision'];
+
+    // DOM Elements
+    const settingsSection = document.getElementById('settings-section');
+    console.log('Initial settingsSection lookup:', settingsSection);
+    const settingsToggle = document.getElementById('settings-toggle');
+    console.log('Initial settingsToggle lookup:', settingsToggle);
+    const apiKeyInput = document.getElementById('settings-api-key');
+    const projectIdInput = document.getElementById('settings-project-id');
+    const userListDiv = document.getElementById('user-list');
+    const newUserEmail = document.getElementById('new-user-email');
+    const newUserPassword = document.getElementById('new-user-password');
+    const addUserBtn = document.getElementById('add-user-btn');
+    const addUserStatus = document.getElementById('add-user-status');
+    const clearAllBtn = document.getElementById('clear-all-btn');
+    
+    const authSection = document.getElementById('auth-section');
+    const userSelector = document.getElementById('user-selector');
+    const loginBtn = document.getElementById('login-btn');
+    const authStatus = document.getElementById('auth-status');
+    const dataSection = document.getElementById('data-section');
+    const fetchBtn = document.getElementById('fetch-btn');
+    const exportBtn = document.getElementById('export-btn');
+    const fieldsContainer = document.getElementById('fields-container');
+    const playfabDisplay = document.getElementById('playfab-display');
+    const saveBtn = document.getElementById('save-btn');
+    const saveStatus = document.getElementById('save-status');
+
+    // App State
+    let authToken = null;
+    let playFabID = null;
+    let currentDocData = null;
+
+    // Initialize
+    document.addEventListener('DOMContentLoaded', async () => {
+        loadSettings();
+        renderUserList();
+        populateUserSelector();
+        
+        // Auto-login if a user was selected
+        const selectedEmail = localStorage.getItem('ttt_selected_user');
+        if (selectedEmail) {
+            const users = JSON.parse(localStorage.getItem('ttt_users') || '[]');
+            const user = users.find(u => u.email === selectedEmail);
+            if (user) {
+                try {
+                    setLoading(loginBtn, true);
+                    showStatus(authStatus, 'Auto-logging in...', 'success');
+                    const authData = await login(user.email, user.password);
+                    authToken = authData.idToken;
+                    playFabID = extractPlayFabId(authToken) || 'A66DEE83B8F5838A';
+                    playfabDisplay.textContent = `PlayFab ID: ${playFabID}`;
+                    
+                    authSection.style.display = 'none';
+                    dataSection.style.display = 'block';
+                    showStatus(authStatus, 'Auto-login successful!', 'success');
+                } catch (e) {
+                    showStatus(authStatus, 'Auto-login failed: ' + e.message, 'error');
+                } finally {
+                    setLoading(loginBtn, false);
+                }
+            }
+        }
+    });
+
+    // Helper: Load settings from localStorage
+    function loadSettings() {
+        apiKeyInput.value = API_KEY;
+        projectIdInput.value = PROJECT_ID;
+    }
+
+    // Helper: Populate User Dropdown
+    function populateUserSelector() {
+        userSelector.innerHTML = '';
+        const users = JSON.parse(localStorage.getItem('ttt_users') || '[]');
+        const selectedEmail = localStorage.getItem('ttt_selected_user');
+        
+        users.forEach(user => {
+            const option = document.createElement('option');
+            option.value = user.email;
+            option.textContent = user.email;
+            if (user.email === selectedEmail) {
+                option.selected = true;
+            }
+            userSelector.appendChild(option);
+        });
+    }
+
+    // Helper: Render User List in Settings
+    function renderUserList() {
+        userListDiv.innerHTML = '';
+        const users = JSON.parse(localStorage.getItem('ttt_users') || '[]');
+        
+        users.forEach(user => {
+            const div = document.createElement('div');
+            div.style.display = 'flex';
+            div.style.justifyContent = 'space-between';
+            div.style.alignItems = 'center';
+            div.style.marginBottom = '8px';
+            div.style.padding = '8px';
+            div.style.background = 'rgba(255,255,255,0.05)';
+            div.style.borderRadius = '8px';
+            
+            div.innerHTML = `
+                <span>${user.email}</span>
+                <button class="delete-user-btn" data-email="${user.email}" style="width: auto; padding: 6px 12px; background: var(--error); font-size: 0.8rem;">Delete</button>
+            `;
+            userListDiv.appendChild(div);
+        });
+        
+        // Add delete event listeners
+        document.querySelectorAll('.delete-user-btn').forEach(btn => {
+            btn.addEventListener('click', (e) => {
+                const email = e.target.getAttribute('data-email');
+                deleteUser(email);
+            });
+        });
+    }
+
+    // Helper: Delete User
+    function deleteUser(email) {
+        let users = JSON.parse(localStorage.getItem('ttt_users') || '[]');
+        users = users.filter(u => u.email !== email);
+        localStorage.setItem('ttt_users', JSON.stringify(users));
+        
+        const selectedEmail = localStorage.getItem('ttt_selected_user');
+        if (localStorage.getItem('ttt_selected_user') === email) localStorage.removeItem('ttt_selected_user');
+        if (selectedEmail === email) {
+            localStorage.removeItem('ttt_selected_user');
+        }
+        
+        renderUserList();
+        populateUserSelector();
+    }
+
+    function setLoading(btn, isLoading) {
+        if (isLoading) {
+            btn.classList.add('loading');
+            btn.disabled = true;
+        } else {
+            btn.classList.remove('loading');
+            btn.disabled = false;
+        }
+    }
+
+    function showStatus(el, message, type) {
+        el.textContent = message;
+        el.className = `status ${type}`;
+    }
+
+    function extractPlayFabId(token) {
+        try {
+            const payload = JSON.parse(atob(token.split('.')[1]));
+            return payload.playfabID || payload.playfab_id || payload.user_id || payload.sub;
+        } catch (e) {
+            console.error('Failed to parse JWT', e);
+            return null;
+        }
+    }
+
+    async function login(email, password) {
+        const url = `https://identitytoolkit.googleapis.com/v1/accounts:signInWithPassword?key=${API_KEY}`;
+        const response = await fetch(url, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ email, password, returnSecureToken: true })
+        });
+        
+        if (!response.ok) {
+            const error = await response.json();
+            throw new Error(error.error.message || 'Login failed');
+        }
+        
+        return await response.json();
+    }
+
+    async function fetchDoc(token, docId) {
+        const url = `https://firestore.googleapis.com/v1/projects/${PROJECT_ID}/databases/(default)/documents/saves/${docId}`;
+        const response = await fetch(url, {
+            headers: { 'Authorization': `Bearer ${token}` }
+        });
+        
+        if (!response.ok) {
+            throw new Error(`Failed to fetch save: ${response.statusText}`);
+        }
+        
+        return await response.json();
+    }
+
+    async function updateDoc(token, docId, fieldsToUpdate, originalDoc) {
+        const url = `https://firestore.googleapis.com/v1/projects/${PROJECT_ID}/databases/(default)/documents/saves/${docId}`;
+        
+        const updatedFields = { ...originalDoc.fields };
+        
+        for (const key in fieldsToUpdate) {
+            if (updatedFields[key]) {
+                if (updatedFields[key].integerValue !== undefined) {
+                    updatedFields[key] = { integerValue: parseInt(fieldsToUpdate[key]) };
+                } else if (updatedFields[key].doubleValue !== undefined) {
+                    updatedFields[key] = { doubleValue: parseFloat(fieldsToUpdate[key]) };
+                } else {
+                    updatedFields[key] = { stringValue: fieldsToUpdate[key] };
+                }
+            }
+        }
+
+        const now = new Date();
+        const nowUTCStr = now.toISOString();
+        
+        let lastSaveTime = now;
+        if (updatedFields['LastCloudSaveTime'] && updatedFields['LastCloudSaveTime'].stringValue) {
+            lastSaveTime = new Date(updatedFields['LastCloudSaveTime'].stringValue);
+        }
+        updatedFields['LastCloudSaveTime'] = { stringValue: nowUTCStr };
+        
+        const timeDiffSec = (now - lastSaveTime) / 1000;
+        const playTimeIncrement = Math.random() * Math.max(0, timeDiffSec);
+        
+        let currentPlayTime = 0;
+        if (updatedFields['PlayTime']) {
+            currentPlayTime = parseFloat(updatedFields['PlayTime'].doubleValue || updatedFields['PlayTime'].integerValue || 0);
+        }
+        const newPlayTime = currentPlayTime + playTimeIncrement;
+        updatedFields['PlayTime'] = { doubleValue: newPlayTime };
+        
+        if (!fieldsToUpdate['SaveRevision']) {
+            let currentRevision = 0;
+            if (updatedFields['SaveRevision']) {
+                currentRevision = parseInt(updatedFields['SaveRevision'].integerValue || updatedFields['SaveRevision'].doubleValue || 0);
+            }
+            updatedFields['SaveRevision'] = { integerValue: currentRevision + 1 };
+        }
+        
+        const newGameTimeInBattle = Math.random() * newPlayTime;
+        updatedFields['GameTimeInBattle'] = { doubleValue: newGameTimeInBattle };
+        
+        if (updatedFields['updateTime']) {
+            updatedFields['updateTime'] = { stringValue: nowUTCStr };
+        }
+
+        const response = await fetch(url, {
+            method: 'PATCH',
+            headers: { 
+                'Authorization': `Bearer ${token}`,
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({ fields: updatedFields })
+        });
+
+        if (!response.ok) {
+             const err = await response.json();
+            throw new Error(`Failed to update: ${response.statusText}`);
+        }
+        
+        return await response.json();
+    }
+
+
+
+    apiKeyInput.addEventListener('input', (e) => {
+        API_KEY = e.target.value;
+        localStorage.setItem('ttt_api_key', API_KEY);
+    });
+
+    projectIdInput.addEventListener('input', (e) => {
+        PROJECT_ID = e.target.value;
+        localStorage.setItem('ttt_project_id', PROJECT_ID);
+    });
+
+    addUserBtn.addEventListener('click', async () => {
+        const email = newUserEmail.value;
+        const password = newUserPassword.value;
+        
+        if (!email || !password) {
+            showStatus(addUserStatus, 'Please enter email and password', 'error');
+            return;
+        }
+
+        setLoading(addUserBtn, true);
+        showStatus(addUserStatus, 'Verifying...', 'success');
+        
+        try {
+            await login(email, password);
+            const users = JSON.parse(localStorage.getItem('ttt_users') || '[]');
+            if (!users.find(u => u.email === email)) {
+                users.push({ email, password });
+                localStorage.setItem('ttt_users', JSON.stringify(users));
+                
+                renderUserList();
+                populateUserSelector();
+                showStatus(addUserStatus, 'User added successfully!', 'success');
+                
+                newUserEmail.value = '';
+                newUserPassword.value = '';
+            } else {
+                showStatus(addUserStatus, 'User already exists', 'error');
+            }
+        } catch (error) {
+            showStatus(addUserStatus, 'Verification failed: ' + error.message, 'error');
+        } finally {
+            setLoading(addUserBtn, false);
+        }
+    });
+
+    console.log('Adding listener to settingsToggle:', settingsToggle);
+    settingsToggle.addEventListener('click', () => {
+        console.log('Settings toggle clicked');
+        const currentDisplay = window.getComputedStyle(settingsSection).display;
+        console.log('Current display computed:', currentDisplay);
+        
+        const debugStatus = document.getElementById('debug-status');
+        if (debugStatus) {
+            debugStatus.textContent = `Current: ${currentDisplay}, Setting to: ${currentDisplay === 'none' ? 'block' : 'none'}`;
+        }
+        
+        settingsSection.style.display = currentDisplay === 'none' ? 'block' : 'none';
+        console.log('Display set to:', settingsSection.style.display);
+    });
+
+    userSelector.addEventListener('change', (e) => {
+        localStorage.setItem('ttt_selected_user', e.target.value);
+    });
+
+    loginBtn.addEventListener('click', async () => {
+        const email = userSelector.value;
+        if (!email) {
+            showStatus(authStatus, 'Please select a user or add one in settings', 'error');
+            return;
+        }
+
+        const users = JSON.parse(localStorage.getItem('ttt_users') || '[]');
+        const user = users.find(u => u.email === email);
+        
+        if (!user) return;
+
+        setLoading(loginBtn, true);
+        showStatus(authStatus, 'Logging in...', 'success');
+        
+        try {
+            const authData = await login(user.email, user.password);
+            authToken = authData.idToken;
+            
+            playFabID = extractPlayFabId(authToken) || 'A66DEE83B8F5838A';
+            playfabDisplay.textContent = `PlayFab ID: ${playFabID}`;
+            
+            showStatus(authStatus, 'Login successful!', 'success');
+            authSection.style.display = 'none';
+            dataSection.style.display = 'block';
+            
+        } catch (error) {
+            showStatus(authStatus, error.message, 'error');
+        } finally {
+            setLoading(loginBtn, false);
+        }
+    });
+
+    fetchBtn.addEventListener('click', async () => {
+        if (!authToken || !playFabID) return;
+        
+        setLoading(fetchBtn, true);
+        
+        try {
+            currentDocData = await fetchDoc(authToken, playFabID);
+            renderFields(currentDocData.fields);
+            
+            fieldsContainer.style.display = 'block';
+            saveBtn.style.display = 'block';
+            exportBtn.style.display = 'block';
+            
+        } catch (error) {
+            alert(`Failed to fetch: ${error.message}`);
+        } finally {
+            setLoading(fetchBtn, false);
+        }
+    });
+
+    function renderFields(fields) {
+        fieldsContainer.innerHTML = '';
+        CONFIGURABLE_FIELDS.forEach(fieldKey => {
+            const fieldData = fields[fieldKey];
+            if (fieldData) {
+                const val = fieldData.doubleValue !== undefined ? fieldData.doubleValue : 
+                            (fieldData.stringValue !== undefined ? fieldData.stringValue : 
+                            (fieldData.integerValue !== undefined ? fieldData.integerValue : 'N/A'));
+                
+                const div = document.createElement('div');
+                div.className = 'form-group';
+                div.innerHTML = `
+                    <label for="field-${fieldKey}">${fieldKey} <span style="font-size: 0.8rem; color: var(--text-muted); font-weight: 400;">(Original: ${val})</span></label>
+                    <input type="text" id="field-${fieldKey}" value="${val}" data-key="${fieldKey}">
+                `;
+                fieldsContainer.appendChild(div);
+            }
+        });
+    }
+
+    saveBtn.addEventListener('click', async () => {
+        if (!authToken || !playFabID || !currentDocData) return;
+        
+        setLoading(saveBtn, true);
+        showStatus(saveStatus, '', '');
+        
+        const fieldsToUpdate = {};
+        CONFIGURABLE_FIELDS.forEach(fieldKey => {
+            const input = document.getElementById(`field-${fieldKey}`);
+            if (input) {
+                fieldsToUpdate[fieldKey] = input.value;
+            }
+        });
+        
+        try {
+            await updateDoc(authToken, playFabID, fieldsToUpdate, currentDocData);
+            showStatus(saveStatus, 'Update successful!', 'success');
+            
+            currentDocData = await fetchDoc(authToken, playFabID);
+            renderFields(currentDocData.fields);
+        } catch (error) {
+            showStatus(saveStatus, error.message, 'error');
+        } finally {
+            setLoading(saveBtn, false);
+        }
+    });
+
+    exportBtn.addEventListener('click', () => {
+        if (!currentDocData) return;
+        
+        const sortedData = sortObjectKeys(currentDocData);
+        const jsonStr = JSON.stringify(sortedData, null, 2);
+        
+        const blob = new Blob([jsonStr], { type: 'application/json' });
+        const url = URL.createObjectURL(blob);
+        
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `player_data_${playFabID}.json`;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+    });
+
+    function sortObjectKeys(obj) {
+        if (obj === null || typeof obj !== 'object') {
+            return obj;
+        }
+        if (Array.isArray(obj)) {
+            return obj.map(sortObjectKeys);
+        }
+        return Object.keys(obj).sort().reduce((result, key) => {
+            result[key] = sortObjectKeys(obj[key]);
+            return result;
+        }, {});
+    }
+
+    clearAllBtn.addEventListener('click', () => {
+        if (confirm('Are you sure you want to clear everything? This will delete all cached credentials and keys.')) {
+            localStorage.clear();
+            location.reload();
+        }
+    });
+
+</script>
+</body>
+</html>
