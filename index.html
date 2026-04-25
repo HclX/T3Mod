@@ -308,6 +308,11 @@
                     <span class="loader"></span>
                     <span class="btn-text">Import from JSON</span>
                 </button>
+                
+                <button id="delete-btn" style="display: none; margin-top: 12px; background: var(--error);">
+                    <span class="loader"></span>
+                    <span class="btn-text">Delete Document</span>
+                </button>
                 <input type="file" id="file-input" accept=".json" style="display: none;">
                 
                 <div id="save-status" class="status"></div>
@@ -362,6 +367,7 @@
     const switchUserBtn = document.getElementById('switch-user-btn');
     const importBtn = document.getElementById('import-btn');
     const fileInput = document.getElementById('file-input');
+    const deleteBtn = document.getElementById('delete-btn');
     const rawEditContainer = document.getElementById('raw-edit-container');
     const rawJsonTextarea = document.getElementById('raw-json-textarea');
     const applyRawBtn = document.getElementById('apply-raw-btn');
@@ -603,6 +609,20 @@
         return await response.json();
     }
 
+    async function deleteDoc(token, docId) {
+        const url = `https://firestore.googleapis.com/v1/projects/${PROJECT_ID}/databases/(default)/documents/saves/${docId}`;
+        const response = await fetch(url, {
+            method: 'DELETE',
+            headers: { 'Authorization': `Bearer ${token}` }
+        });
+        
+        if (!response.ok) {
+            throw new Error(`Failed to delete: ${response.statusText}`);
+        }
+        
+        return response;
+    }
+
 
 
     apiKeyInput.addEventListener('input', (e) => {
@@ -706,6 +726,7 @@
         dataSection.style.display = 'none';
         authSection.style.display = 'block';
         rawEditContainer.style.display = 'none';
+        deleteBtn.style.display = 'none';
         document.querySelector('main').style.maxWidth = '500px';
         showStatus(authStatus, 'Please log in with a different user', 'success');
     });
@@ -723,6 +744,7 @@
             saveBtn.style.display = 'block';
             exportBtn.style.display = 'block';
             importBtn.style.display = 'block';
+            deleteBtn.style.display = 'block';
             rawEditContainer.style.display = 'flex';
             document.querySelector('main').style.maxWidth = '1400px';
             editor.setValue(JSON.stringify(sortObjectKeys(currentDocData), null, 2));
@@ -799,6 +821,35 @@
         fileInput.click();
     });
 
+    deleteBtn.addEventListener('click', async () => {
+        if (!authToken || !playFabID) return;
+        
+        if (!confirm('Are you sure you want to delete the cloud save document? This cannot be undone.')) {
+            return;
+        }
+        
+        setLoading(deleteBtn, true);
+        showStatus(saveStatus, '', '');
+        
+        try {
+            await deleteDoc(authToken, playFabID);
+            showStatus(saveStatus, 'Document deleted successfully from cloud!', 'success');
+            
+            fieldsContainer.style.display = 'none';
+            saveBtn.style.display = 'none';
+            exportBtn.style.display = 'none';
+            importBtn.style.display = 'none';
+            deleteBtn.style.display = 'none';
+            rawEditContainer.style.display = 'none';
+            document.querySelector('main').style.maxWidth = '500px';
+            editor.setValue('{}');
+        } catch (error) {
+            showStatus(saveStatus, error.message, 'error');
+        } finally {
+            setLoading(deleteBtn, false);
+        }
+    });
+
     fileInput.addEventListener('change', (e) => {
         const file = e.target.files[0];
         if (!file) return;
@@ -828,8 +879,7 @@
         const saveRevisionInput = document.getElementById('field-SaveRevision');
         const saveRevision = saveRevisionInput ? saveRevisionInput.value : 'unknown';
         
-        const sortedData = sortObjectKeys(currentDocData);
-        const jsonStr = JSON.stringify(sortedData, null, 2);
+        const jsonStr = JSON.stringify(currentDocData, null, 2);
         
         const blob = new Blob([jsonStr], { type: 'application/json' });
         const url = URL.createObjectURL(blob);
