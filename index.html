@@ -177,6 +177,8 @@
             margin-top: 32px;
             border-top: 1px solid var(--border);
             padding-top: 32px;
+            flex-direction: column;
+            flex: 1;
         }
 
         .editable-fields {
@@ -277,10 +279,9 @@
         <section id="data-section">
             <header style="text-align: left; margin-bottom: 16px;">
             <div style="display: flex; justify-content: space-between; align-items: center; width: 100%;">
-                <h2 style="font-size: 1.2rem; font-weight: 600;">Player Data</h2>
+                <h2 id="user-display" style="font-size: 1.2rem; font-weight: 600;">User: --</h2>
                 <button id="switch-user-btn" style="width: auto; padding: 6px 12px; background: #475569; font-size: 0.8rem;">Switch User</button>
             </div>
-            <p class="subtitle" id="playfab-display" style="margin-top: 4px;">PlayFab ID: --</p>
         </header>
 
             <button id="fetch-btn" style="margin-bottom: 16px;">
@@ -292,23 +293,25 @@
                 <!-- Configurable fields will be injected here -->
             </div>
 
-            <button id="save-btn" style="display: none;">
-                <span class="loader"></span>
-                <span class="btn-text">Push to Firestore</span>
-            </button>
+            <div style="margin-top: auto;">
+                <button id="save-btn" style="display: none;">
+                    <span class="loader"></span>
+                    <span class="btn-text">Push to Firestore</span>
+                </button>
 
-            <button id="export-btn" style="display: none; margin-top: 12px; background: #475569;">
-                <span class="loader"></span>
-                <span class="btn-text">Export to JSON</span>
-            </button>
+                <button id="export-btn" style="display: none; margin-top: 12px; background: #475569;">
+                    <span class="loader"></span>
+                    <span class="btn-text">Export to JSON</span>
+                </button>
 
-            <button id="import-btn" style="display: none; margin-top: 12px; background: #475569;">
-                <span class="loader"></span>
-                <span class="btn-text">Import from JSON</span>
-            </button>
-            <input type="file" id="file-input" accept=".json" style="display: none;">
-            
-            <div id="save-status" class="status"></div>
+                <button id="import-btn" style="display: none; margin-top: 12px; background: #475569;">
+                    <span class="loader"></span>
+                    <span class="btn-text">Import from JSON</span>
+                </button>
+                <input type="file" id="file-input" accept=".json" style="display: none;">
+                
+                <div id="save-status" class="status"></div>
+            </div>
         </section>
     </div>
 
@@ -353,7 +356,7 @@
     const fetchBtn = document.getElementById('fetch-btn');
     const exportBtn = document.getElementById('export-btn');
     const fieldsContainer = document.getElementById('fields-container');
-    const playfabDisplay = document.getElementById('playfab-display');
+    const userDisplay = document.getElementById('user-display');
     const saveBtn = document.getElementById('save-btn');
     const saveStatus = document.getElementById('save-status');
     const switchUserBtn = document.getElementById('switch-user-btn');
@@ -394,10 +397,10 @@
                     const authData = await login(user.email, user.password);
                     authToken = authData.idToken;
                     playFabID = extractPlayFabId(authToken) || 'A66DEE83B8F5838A';
-                    playfabDisplay.textContent = `PlayFab ID: ${playFabID}`;
+                    userDisplay.textContent = `User: ${user.email}`;
                     
                     authSection.style.display = 'none';
-                    dataSection.style.display = 'block';
+                    dataSection.style.display = 'flex';
                     showStatus(authStatus, 'Auto-login successful!', 'success');
                 } catch (e) {
                     showStatus(authStatus, 'Auto-login failed: ' + e.message, 'error');
@@ -686,11 +689,11 @@
             authToken = authData.idToken;
             
             playFabID = extractPlayFabId(authToken) || 'A66DEE83B8F5838A';
-            playfabDisplay.textContent = `PlayFab ID: ${playFabID}`;
+            userDisplay.textContent = `User: ${email}`;
             
             showStatus(authStatus, 'Login successful!', 'success');
             authSection.style.display = 'none';
-            dataSection.style.display = 'block';
+            dataSection.style.display = 'flex';
             
         } catch (error) {
             showStatus(authStatus, error.message, 'error');
@@ -833,7 +836,7 @@
         
         const a = document.createElement('a');
         a.href = url;
-        a.download = `player_${playFabID}_${saveRevision}.json`;
+        a.download = `player_${userSelector.value}_${saveRevision}.json`;
         document.body.appendChild(a);
         a.click();
         document.body.removeChild(a);
