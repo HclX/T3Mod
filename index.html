@@ -183,6 +183,9 @@
 
         .editable-fields {
             margin-bottom: 24px;
+            max-height: 400px;
+            overflow-y: auto;
+            padding-right: 8px;
         }
 
         .loader {
@@ -213,11 +216,20 @@
             font-family: monospace;
             font-size: 0.9rem;
             margin-top: 8px;
+            overflow-x: hidden !important;
         }
         
         .CodeMirror-scroll {
             max-height: calc(100vh - 250px) !important;
             overflow-x: hidden !important;
+        }
+        
+        .CodeMirror-line {
+            word-break: break-all !important;
+        }
+        
+        .CodeMirror-hscrollbar {
+            display: none !important;
         }
     </style>
     <!-- CodeMirror CSS -->
@@ -294,10 +306,17 @@
             </div>
 
             <div style="margin-top: auto;">
-                <button id="save-btn" style="display: none;">
-                    <span class="loader"></span>
-                    <span class="btn-text">Push to Firestore</span>
-                </button>
+                <div style="display: flex; gap: 12px; margin-top: 12px;">
+                    <button id="patch-btn" style="display: none; flex: 2;">
+                        <span class="loader"></span>
+                        <span class="btn-text">Patch</span>
+                    </button>
+
+                    <button id="upload-btn" style="display: none; flex: 1; background: #475569;">
+                        <span class="loader"></span>
+                        <span class="btn-text">Upload All</span>
+                    </button>
+                </div>
 
                 <button id="export-btn" style="display: none; margin-top: 12px; background: #475569;">
                     <span class="loader"></span>
@@ -321,7 +340,7 @@
     </div>
 
     <!-- Right Card -->
-    <div id="raw-edit-container" class="card" style="flex: 1; display: none; flex-direction: column;">
+    <div id="raw-edit-container" class="card" style="flex: 1; display: none; flex-direction: column; overflow-x: hidden;">
         <header style="text-align: left; margin-bottom: 16px;">
             <h2 style="font-size: 1.2rem; font-weight: 600;">Raw JSON View</h2>
             <p class="subtitle">Directly edit the full document</p>
@@ -337,7 +356,7 @@
     let PROJECT_ID = localStorage.getItem('ttt_project_id') || '';
     
     // Configurable Fields (User can add more here)
-    const CONFIGURABLE_FIELDS = ['Coins', 'SaveRevision'];
+    const CONFIGURABLE_FIELDS = ['Coins', 'Gems', 'Stones', 'Cells', 'Medals', 'Keys', 'Tokens', 'Bits', 'Tickets', 'ModuleTickets', 'CannonShards', 'ArmorShards', 'GeneratorShards', 'CoreShards', 'RerollShards', 'SaveRevision'];
 
     // DOM Elements
     const settingsSection = document.getElementById('settings-section');
@@ -362,7 +381,8 @@
     const exportBtn = document.getElementById('export-btn');
     const fieldsContainer = document.getElementById('fields-container');
     const userDisplay = document.getElementById('user-display');
-    const saveBtn = document.getElementById('save-btn');
+    const patchBtn = document.getElementById('patch-btn');
+    const uploadBtn = document.getElementById('upload-btn');
     const saveStatus = document.getElementById('save-status');
     const switchUserBtn = document.getElementById('switch-user-btn');
     const importBtn = document.getElementById('import-btn');
@@ -541,16 +561,20 @@
         return await response.json();
     }
 
-    async function updateDoc(token, docId, fieldsToUpdate, originalDoc) {
-        const url = `https://firestore.googleapis.com/v1/projects/${PROJECT_ID}/databases/(default)/documents/saves/${docId}`;
+    async function patchDoc(token, docId, fieldsToUpdate, originalDoc) {
+        const baseUrl = `https://firestore.googleapis.com/v1/projects/${PROJECT_ID}/databases/(default)/documents/saves/${docId}`;
         
-        const updatedFields = { ...originalDoc.fields };
+        const updatedFields = {};
+        const maskParams = [];
         
         for (const key in fieldsToUpdate) {
-            if (updatedFields[key]) {
-                if (updatedFields[key].integerValue !== undefined) {
+            const originalField = originalDoc.fields[key];
+            if (originalField) {
+                maskParams.push(`updateMask.fieldPaths=${key}`);
+                
+                if (originalField.integerValue !== undefined) {
                     updatedFields[key] = { integerValue: parseInt(fieldsToUpdate[key]) };
-                } else if (updatedFields[key].doubleValue !== undefined) {
+                } else if (originalField.doubleValue !== undefined) {
                     updatedFields[key] = { doubleValue: parseFloat(fieldsToUpdate[key]) };
                 } else {
                     updatedFields[key] = { stringValue: fieldsToUpdate[key] };
@@ -558,38 +582,41 @@
             }
         }
 
-        const now = new Date();
-        const nowUTCStr = now.toISOString();
-        
-        let lastSaveTime = now;
-        if (updatedFields['LastCloudSaveTime'] && updatedFields['LastCloudSaveTime'].stringValue) {
-            lastSaveTime = new Date(updatedFields['LastCloudSaveTime'].stringValue);
+        const url = maskParams.length > 0 ? `${baseUrl}?${maskParams.join('&')}` : baseUrl;
+
+        const response = await fetch(url, {
+            method: 'PATCH',
+            headers: { 
+                'Authorization': `Bearer ${token}`,
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({ fields: updatedFields })
+        });
+
+        if (!response.ok) {
+             const err = await response.json();
+            throw new Error(`Failed to update: ${response.statusText}`);
         }
-        updatedFields['LastCloudSaveTime'] = { stringValue: nowUTCStr };
         
-        const timeDiffSec = (now - lastSaveTime) / 1000;
-        const playTimeIncrement = Math.random() * Math.max(0, timeDiffSec);
+        return await response.json();
+    }
+
+    async function uploadDoc(token, docId, fieldsToUpdate, originalDoc) {
+        const url = `https://firestore.googleapis.com/v1/projects/${PROJECT_ID}/databases/(default)/documents/saves/${docId}`;
         
-        let currentPlayTime = 0;
-        if (updatedFields['PlayTime']) {
-            currentPlayTime = parseFloat(updatedFields['PlayTime'].doubleValue || updatedFields['PlayTime'].integerValue || 0);
-        }
-        const newPlayTime = currentPlayTime + playTimeIncrement;
-        updatedFields['PlayTime'] = { doubleValue: newPlayTime };
+        const updatedFields = { ...originalDoc.fields };
         
-        if (!fieldsToUpdate['SaveRevision']) {
-            let currentRevision = 0;
-            if (updatedFields['SaveRevision']) {
-                currentRevision = parseInt(updatedFields['SaveRevision'].integerValue || updatedFields['SaveRevision'].doubleValue || 0);
+        for (const key in fieldsToUpdate) {
+            const originalField = originalDoc.fields[key];
+            if (originalField) {
+                if (originalField.integerValue !== undefined) {
+                    updatedFields[key] = { integerValue: parseInt(fieldsToUpdate[key]) };
+                } else if (originalField.doubleValue !== undefined) {
+                    updatedFields[key] = { doubleValue: parseFloat(fieldsToUpdate[key]) };
+                } else {
+                    updatedFields[key] = { stringValue: fieldsToUpdate[key] };
+                }
             }
-            updatedFields['SaveRevision'] = { integerValue: currentRevision + 1 };
-        }
-        
-        const newGameTimeInBattle = Math.random() * newPlayTime;
-        updatedFields['GameTimeInBattle'] = { doubleValue: newGameTimeInBattle };
-        
-        if (updatedFields['updateTime']) {
-            updatedFields['updateTime'] = { stringValue: nowUTCStr };
         }
 
         const response = await fetch(url, {
@@ -741,13 +768,14 @@
             renderFields(currentDocData.fields);
             
             fieldsContainer.style.display = 'block';
-            saveBtn.style.display = 'block';
+            patchBtn.style.display = 'block';
+            uploadBtn.style.display = 'block';
             exportBtn.style.display = 'block';
             importBtn.style.display = 'block';
             deleteBtn.style.display = 'block';
             rawEditContainer.style.display = 'flex';
             document.querySelector('main').style.maxWidth = '1400px';
-            editor.setValue(JSON.stringify(sortObjectKeys(currentDocData), null, 2));
+            editor.setValue(JSON.stringify(sortDocumentFields(currentDocData), null, 2));
             
         } catch (error) {
             alert(`Failed to fetch: ${error.message}`);
@@ -776,10 +804,19 @@
         });
     }
 
-    saveBtn.addEventListener('click', async () => {
+    patchBtn.addEventListener('click', async () => {
+        await handleSave(true);
+    });
+
+    uploadBtn.addEventListener('click', async () => {
+        await handleSave(false);
+    });
+
+    async function handleSave(isPatch) {
         if (!authToken || !playFabID || !currentDocData) return;
         
-        setLoading(saveBtn, true);
+        const btn = isPatch ? patchBtn : uploadBtn;
+        setLoading(btn, true);
         showStatus(saveStatus, '', '');
         
         const fieldsToUpdate = {};
@@ -791,7 +828,11 @@
         });
         
         try {
-            await updateDoc(authToken, playFabID, fieldsToUpdate, currentDocData);
+            if (isPatch) {
+                await patchDoc(authToken, playFabID, fieldsToUpdate, currentDocData);
+            } else {
+                await uploadDoc(authToken, playFabID, fieldsToUpdate, currentDocData);
+            }
             showStatus(saveStatus, 'Update successful!', 'success');
             
             currentDocData = await fetchDoc(authToken, playFabID);
@@ -799,9 +840,9 @@
         } catch (error) {
             showStatus(saveStatus, error.message, 'error');
         } finally {
-            setLoading(saveBtn, false);
+            setLoading(btn, false);
         }
-    });
+    }
 
     applyRawBtn.addEventListener('click', () => {
         try {
@@ -836,7 +877,8 @@
             showStatus(saveStatus, 'Document deleted successfully from cloud!', 'success');
             
             fieldsContainer.style.display = 'none';
-            saveBtn.style.display = 'none';
+            patchBtn.style.display = 'none';
+            uploadBtn.style.display = 'none';
             exportBtn.style.display = 'none';
             importBtn.style.display = 'none';
             deleteBtn.style.display = 'none';
@@ -879,7 +921,7 @@
         const saveRevisionInput = document.getElementById('field-SaveRevision');
         const saveRevision = saveRevisionInput ? saveRevisionInput.value : 'unknown';
         
-        const jsonStr = JSON.stringify(currentDocData, null, 2);
+        const jsonStr = JSON.stringify(sortDocumentFields(currentDocData), null, 2);
         
         const blob = new Blob([jsonStr], { type: 'application/json' });
         const url = URL.createObjectURL(blob);
@@ -893,17 +935,18 @@
         URL.revokeObjectURL(url);
     });
 
-    function sortObjectKeys(obj) {
-        if (obj === null || typeof obj !== 'object') {
-            return obj;
-        }
-        if (Array.isArray(obj)) {
-            return obj.map(sortObjectKeys);
-        }
-        return Object.keys(obj).sort().reduce((result, key) => {
-            result[key] = sortObjectKeys(obj[key]);
-            return result;
-        }, {});
+    function sortDocumentFields(doc) {
+        if (!doc || !doc.fields) return doc;
+        
+        const sortedFields = {};
+        Object.keys(doc.fields).sort().forEach(key => {
+            sortedFields[key] = doc.fields[key];
+        });
+        
+        return {
+            ...doc,
+            fields: sortedFields
+        };
     }
 
     clearAllBtn.addEventListener('click', () => {
