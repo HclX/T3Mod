@@ -327,7 +327,8 @@
     const PACKAGE_NAME = "com.TechTreeGames.TheTower";
     
     // Configurable Fields (User can add more here)
-    const CONFIGURABLE_FIELDS = ['Coins', 'Gems', 'Stones', 'Cells', 'Medals', 'Keys', 'Tokens', 'Bits', 'Tickets', 'ModuleTickets', 'CannonShards', 'ArmorShards', 'GeneratorShards', 'CoreShards', 'RerollShards', 'SaveRevision'];
+    const CONFIGURABLE_FIELDS = ['Coins', 'Gems', 'Stones', 'Medals', 'CannonShards', 'ArmorShards', 'GeneratorShards', 'CoreShards', 'RerollShards'];
+    const CHEATER_FIELDS = ['CheaterBool', 'CheaterBoolManual'];
 
     // DOM Elements
     const settingsSection = document.getElementById('settings-section');
@@ -764,6 +765,7 @@
                 userSelector.value = email;
                 localStorage.setItem('ttt_selected_user', email);
                 settingsSection.style.display = 'none';
+                settingsToggle.style.display = 'block';
                 
                 authToken = authData.idToken;
                 playFabID = extractPlayFabId(authToken) || 'A66DEE83B8F5838A';
@@ -835,6 +837,8 @@
     switchUserBtn.addEventListener('click', () => {
         dataSection.style.display = 'none';
         authSection.style.display = 'block';
+        settingsToggle.style.display = 'block';
+        settingsSection.style.display = 'none';
         deleteBtn.style.display = 'none';
         document.querySelector('main').style.maxWidth = '500px';
         showStatus(authStatus, 'Please log in with a different user', 'success');
@@ -874,6 +878,44 @@
             if (maxChecksStr) maxChecks = JSON.parse(maxChecksStr);
         } catch(e) {}
         
+        // Render cheater flag fields as a group
+        const cheaterDiv = document.createElement('div');
+        cheaterDiv.className = 'form-group';
+        let anyFlagged = false;
+        let cheaterLabels = '';
+        CHEATER_FIELDS.forEach(fieldKey => {
+            const fieldData = fields[fieldKey];
+            const val = fieldData ? (fieldData.integerValue !== undefined ? fieldData.integerValue : '0') : '0';
+            const isFlagged = parseInt(val) !== 0;
+            if (isFlagged) anyFlagged = true;
+            cheaterLabels += `${fieldKey}: <span style="color: ${isFlagged ? '#ef4444' : 'var(--text-muted)'}; font-weight: ${isFlagged ? '600' : '400'};">${val}${isFlagged ? ' ⚠️' : ''}</span> &nbsp; `;
+        });
+        if (anyFlagged) cheaterDiv.style.cssText = 'border-left: 3px solid #ef4444; padding-left: 12px;';
+        cheaterDiv.innerHTML = `
+            <label style="font-size: 0.9rem;">${cheaterLabels}</label>
+            <label style="display: flex; align-items: center; gap: 8px; cursor: pointer; font-weight: 400; font-size: 0.9rem;">
+                <input type="checkbox" id="clear-cheater-flags" ${anyFlagged ? 'checked' : ''} style="width: auto; margin: 0;">
+                Clear cheater flags on next upload
+            </label>
+        `;
+        fieldsContainer.appendChild(cheaterDiv);
+
+        // Render SaveRevision as read-only with increment checkbox
+        const revData = fields['SaveRevision'];
+        if (revData) {
+            const revVal = revData.integerValue !== undefined ? revData.integerValue : '0';
+            const revDiv = document.createElement('div');
+            revDiv.className = 'form-group';
+            revDiv.innerHTML = `
+                <label style="font-size: 0.9rem;">SaveRevision: <span style="color: var(--text-muted);">${revVal}</span></label>
+                <label style="display: flex; align-items: center; gap: 8px; cursor: pointer; font-weight: 400; font-size: 0.9rem;">
+                    <input type="checkbox" id="increase-revision" checked style="width: auto; margin: 0;">
+                    Increase revision by 3 on next upload
+                </label>
+            `;
+            fieldsContainer.appendChild(revDiv);
+        }
+
         CONFIGURABLE_FIELDS.forEach(fieldKey => {
             const fieldData = fields[fieldKey];
             const origFieldData = originalFields ? originalFields[fieldKey] : fieldData;
@@ -929,6 +971,21 @@
         const nowUTC = new Date().toISOString();
         fieldsToUpdate['LastCloudSaveTime'] = nowUTC;
         fieldsToUpdate['EventLastResearchTime'] = nowUTC;
+        
+        // Include cheater flags if Clear is checked
+        const clearCheater = document.getElementById('clear-cheater-flags');
+        if (clearCheater && clearCheater.checked) {
+            CHEATER_FIELDS.forEach(fieldKey => {
+                fieldsToUpdate[fieldKey] = '0';
+            });
+        }
+        
+        // Increase SaveRevision if checked
+        const increaseRev = document.getElementById('increase-revision');
+        if (increaseRev && increaseRev.checked && currentDocData.fields['SaveRevision']) {
+            const currentRev = parseInt(currentDocData.fields['SaveRevision'].integerValue || '0');
+            fieldsToUpdate['SaveRevision'] = String(currentRev + 3);
+        }
         
         try {
             if (isPatch) {
@@ -992,6 +1049,10 @@
                 const parsedData = JSON.parse(event.target.result);
                 if (parsedData && parsedData.fields) {
                     currentDocData = parsedData;
+                    // Override PlayfabID to match current player
+                    if (playFabID && currentDocData.fields['PlayfabID']) {
+                        currentDocData.fields['PlayfabID'] = { stringValue: playFabID };
+                    }
                     renderFields(currentDocData.fields, fetchedDocData ? fetchedDocData.fields : currentDocData.fields);
                     
                     isImportedMode = true;
@@ -1012,8 +1073,7 @@
     exportBtn.addEventListener('click', () => {
         if (!currentDocData) return;
         
-        const saveRevisionInput = document.getElementById('field-SaveRevision');
-        const saveRevision = saveRevisionInput ? saveRevisionInput.value : 'unknown';
+        const saveRevision = currentDocData.fields['SaveRevision'] ? currentDocData.fields['SaveRevision'].integerValue : 'unknown';
         
         const jsonStr = JSON.stringify(sortDocumentFields(currentDocData), null, 2);
         
