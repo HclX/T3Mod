@@ -246,6 +246,15 @@
                 <div id="add-user-status" class="status" style="margin-top: 8px;"></div>
             </div>
             
+            <div class="form-group" style="margin-top: 16px; border-top: 1px solid var(--border-color); padding-top: 16px;">
+                <label>Cheat Detection</label>
+                <button id="fetch-config-btn" style="width: 100%; margin-top: 8px; padding: 12px; background: #64748b; color: white; border: none; border-radius: 8px; cursor: pointer;">
+                    <span class="loader"></span>
+                    <span class="btn-text">Update Max Values</span>
+                </button>
+                <div id="config-status" class="status" style="margin-top: 8px;"></div>
+            </div>
+
             <button id="clear-all-btn" style="background: var(--error); margin-top: 16px;">Clear Everything</button>
         </section>
 
@@ -314,6 +323,8 @@
     // Configuration & State
     let API_KEY = localStorage.getItem('ttt_api_key') || '';
     let PROJECT_ID = localStorage.getItem('ttt_project_id') || '';
+    const APP_ID = "1:219234862051:android:53efc5501a98c8297c56d6";
+    const PACKAGE_NAME = "com.TechTreeGames.TheTower";
     
     // Configurable Fields (User can add more here)
     const CONFIGURABLE_FIELDS = ['Coins', 'Gems', 'Stones', 'Cells', 'Medals', 'Keys', 'Tokens', 'Bits', 'Tickets', 'ModuleTickets', 'CannonShards', 'ArmorShards', 'GeneratorShards', 'CoreShards', 'RerollShards', 'SaveRevision'];
@@ -342,6 +353,8 @@
     const exportBtn = document.getElementById('export-btn');
     const fieldsContainer = document.getElementById('fields-container');
     const userDisplay = document.getElementById('user-display');
+    const fetchConfigBtn = document.getElementById('fetch-config-btn');
+    const configStatus = document.getElementById('config-status');
     const patchBtn = document.getElementById('patch-btn');
     const saveStatus = document.getElementById('save-status');
     const switchUserBtn = document.getElementById('switch-user-btn');
@@ -618,6 +631,110 @@
         localStorage.setItem('ttt_project_id', PROJECT_ID);
     });
 
+    fetchConfigBtn.addEventListener('click', async () => {
+        if (!API_KEY || !PROJECT_ID) {
+            showStatus(configStatus, 'API Key and Project ID required', 'error');
+            return;
+        }
+        
+        setLoading(fetchConfigBtn, true);
+        showStatus(configStatus, 'Fetching config...', 'success');
+        
+        try {
+            const installUrl = `https://firebaseinstallations.googleapis.com/v1/projects/${PROJECT_ID}/installations`;
+            const installRes = await fetch(installUrl, {
+                method: 'POST',
+                headers: {
+                    'x-goog-api-key': API_KEY,
+                    'content-type': 'application/json'
+                },
+                body: JSON.stringify({
+                    appId: APP_ID,
+                    authVersion: "FIS_v2",
+                    sdkVersion: "a:16.3.2"
+                })
+            });
+            if (!installRes.ok) throw new Error("Failed to get installation");
+            const installData = await installRes.json();
+            const installId = installData.name.split('/').pop();
+            const installToken = installData.authToken.token;
+
+            const configUrl = `https://firebaseremoteconfig.googleapis.com/v1/projects/${PROJECT_ID}/namespaces/firebase:fetch`;
+            const configRes = await fetch(configUrl, {
+                method: 'POST',
+                headers: {
+                    'x-goog-api-key': API_KEY,
+                    'content-type': 'application/json'
+                },
+                body: JSON.stringify({
+                    appId: APP_ID,
+                    appInstanceId: installId,
+                    appInstanceIdToken: installToken,
+                    languageCode: "en-US",
+                    packageName: PACKAGE_NAME
+                })
+            });
+            if (!configRes.ok) throw new Error("Failed to fetch remote config");
+            const configData = await configRes.json();
+
+            if (configData.entries && configData.entries.maxChecks) {
+                localStorage.setItem('ttt_max_checks', configData.entries.maxChecks);
+                showStatus(configStatus, 'Max values updated successfully!', 'success');
+            } else {
+                throw new Error("maxChecks not found in config");
+            }
+        } catch (e) {
+            showStatus(configStatus, e.message, 'error');
+        } finally {
+            setLoading(fetchConfigBtn, false);
+        }
+    });
+
+    function parseGameNumber(str) {
+        if (str === null || str === undefined || str === '') return 0n;
+        if (typeof str === 'number') return BigInt(Math.floor(str));
+        str = str.toString().toUpperCase();
+        let multiplier = 1n;
+        if (str.endsWith('K')) multiplier = 1000n;
+        else if (str.endsWith('M')) multiplier = 1000000n;
+        else if (str.endsWith('B')) multiplier = 1000000000n;
+        else if (str.endsWith('T')) multiplier = 1000000000000n;
+        else if (str.endsWith('Q')) multiplier = 1000000000000000000n;
+        
+        let numStr = str;
+        if (multiplier > 1n) {
+            numStr = str.substring(0, str.length - 1);
+        }
+        let num = parseFloat(numStr);
+        if (isNaN(num)) return 0n;
+        return BigInt(Math.floor(num)) * multiplier;
+    }
+
+    function checkCheatLimits() {
+        const maxChecksStr = localStorage.getItem('ttt_max_checks');
+        if (!maxChecksStr) return;
+        try {
+            const maxChecks = JSON.parse(maxChecksStr);
+            CONFIGURABLE_FIELDS.forEach(fieldKey => {
+                const input = document.getElementById(`field-${fieldKey}`);
+                const warningSpan = document.getElementById(`warning-${fieldKey}`);
+                if (!input || !warningSpan) return;
+                
+                const lowerKey = fieldKey.toLowerCase();
+                if (maxChecks[lowerKey] !== undefined) {
+                    const maxVal = parseGameNumber(maxChecks[lowerKey]);
+                    const currentVal = parseGameNumber(input.value);
+                    if (currentVal > maxVal) {
+                        warningSpan.textContent = ` (Cheat Risk! Max: ${maxChecks[lowerKey]})`;
+                        warningSpan.style.display = 'inline';
+                    } else {
+                        warningSpan.style.display = 'none';
+                    }
+                }
+            });
+        } catch(e) {}
+    }
+
     addUserBtn.addEventListener('click', async () => {
         const email = newUserEmail.value;
         const password = newUserPassword.value;
@@ -751,6 +868,12 @@
 
     function renderFields(fields, originalFields = null) {
         fieldsContainer.innerHTML = '';
+        const maxChecksStr = localStorage.getItem('ttt_max_checks');
+        let maxChecks = {};
+        try {
+            if (maxChecksStr) maxChecks = JSON.parse(maxChecksStr);
+        } catch(e) {}
+        
         CONFIGURABLE_FIELDS.forEach(fieldKey => {
             const fieldData = fields[fieldKey];
             const origFieldData = originalFields ? originalFields[fieldKey] : fieldData;
@@ -763,15 +886,25 @@
                                (origFieldData && origFieldData.stringValue !== undefined ? origFieldData.stringValue : 
                                (origFieldData && origFieldData.integerValue !== undefined ? origFieldData.integerValue : 'N/A'));
                 
+                const lowerKey = fieldKey.toLowerCase();
+                const maxValText = maxChecks[lowerKey] !== undefined ? ` / Max: ${maxChecks[lowerKey]}` : '';
+                
                 const div = document.createElement('div');
                 div.className = 'form-group';
                 div.innerHTML = `
-                    <label for="field-${fieldKey}">${fieldKey} <span style="font-size: 0.8rem; color: var(--text-muted); font-weight: 400;">(Original: ${origVal})</span></label>
+                    <label for="field-${fieldKey}">
+                        ${fieldKey} <span style="font-size: 0.8rem; color: var(--text-muted); font-weight: 400;">(Original: ${origVal}${maxValText})</span>
+                        <span id="warning-${fieldKey}" style="font-size: 0.8rem; color: #ef4444; font-weight: 600; display: none;"></span>
+                    </label>
                     <input type="text" id="field-${fieldKey}" value="${val}" data-key="${fieldKey}">
                 `;
                 fieldsContainer.appendChild(div);
+                
+                const inputEl = div.querySelector(`#field-${fieldKey}`);
+                inputEl.addEventListener('input', checkCheatLimits);
             }
         });
+        checkCheatLimits();
     }
 
     patchBtn.addEventListener('click', async () => {
