@@ -208,36 +208,7 @@
         button.loading .btn-text {
             display: none;
         }
-        
-        .CodeMirror {
-            flex: 1;
-            height: calc(100vh - 250px) !important;
-            border-radius: 12px;
-            font-family: monospace;
-            font-size: 0.9rem;
-            margin-top: 8px;
-            overflow-x: hidden !important;
-        }
-        
-        .CodeMirror-scroll {
-            max-height: calc(100vh - 250px) !important;
-            overflow-x: hidden !important;
-        }
-        
-        .CodeMirror-line {
-            word-break: break-all !important;
-        }
-        
-        .CodeMirror-hscrollbar {
-            display: none !important;
-        }
     </style>
-    <!-- CodeMirror CSS -->
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.13/codemirror.min.css">
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.13/theme/material-darker.min.css">
-    <!-- CodeMirror JS -->
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.13/codemirror.min.js"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.13/mode/javascript/javascript.min.js"></script>
 </head>
 <body>
 
@@ -248,11 +219,13 @@
             <h1>The Tower Save Sync</h1>
             <p class="subtitle">Modify cloud save data via REST API</p>
             <div id="debug-status" style="font-size: 0.8rem; color: var(--text-muted); text-align: center; margin-top: 4px;"></div>
-            <button id="settings-toggle" style="position: absolute; top: 0; right: 0; width: auto; background: transparent; border: none; color: var(--text-muted); cursor: pointer; font-size: 1.2rem;">⚙️</button>
         </header>
 
         <section id="settings-section" style="display: none; margin-bottom: 20px; border-bottom: 1px solid var(--border); padding-bottom: 20px;">
-            <h2 style="font-size: 1.2rem; margin-bottom: 16px;">Settings</h2>
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px;">
+                <h2 style="font-size: 1.2rem; margin: 0;">Settings</h2>
+                <button id="settings-close-btn" style="width: auto; background: transparent; border: none; color: var(--text-muted); cursor: pointer; font-size: 1.2rem; padding: 0;">✕</button>
+            </div>
             <div class="form-group">
                 <label for="settings-api-key">API Key</label>
                 <input type="text" id="settings-api-key" placeholder="AIzaSy...">
@@ -279,7 +252,10 @@
         <section id="auth-section">
             <div class="form-group">
                 <label for="user-selector">Select User</label>
-                <select id="user-selector" style="width: 100%; padding: 12px; background: rgba(15, 23, 42, 0.6); border: 1px solid var(--border); border-radius: 12px; color: var(--text); font-family: inherit; font-size: 1rem;"></select>
+                <div style="display: flex; gap: 8px;">
+                    <select id="user-selector" style="flex: 1; padding: 12px; background: rgba(15, 23, 42, 0.6); border: 1px solid var(--border); border-radius: 12px; color: var(--text); font-family: inherit; font-size: 1rem;"></select>
+                    <button id="settings-toggle" style="width: auto; background: rgba(15, 23, 42, 0.6); border: 1px solid var(--border); color: var(--text-muted); cursor: pointer; font-size: 1.2rem; border-radius: 12px; padding: 0 12px;">⚙️</button>
+                </div>
             </div>
             <button id="login-btn">
                 <span class="loader"></span>
@@ -306,17 +282,10 @@
             </div>
 
             <div style="margin-top: auto;">
-                <div style="display: flex; gap: 12px; margin-top: 12px;">
-                    <button id="patch-btn" style="display: none; flex: 2;">
-                        <span class="loader"></span>
-                        <span class="btn-text">Patch</span>
-                    </button>
-
-                    <button id="upload-btn" style="display: none; flex: 1; background: #475569;">
-                        <span class="loader"></span>
-                        <span class="btn-text">Upload All</span>
-                    </button>
-                </div>
+                <button id="patch-btn" style="display: none; margin-top: 12px;">
+                    <span class="loader"></span>
+                    <span class="btn-text">Patch</span>
+                </button>
 
                 <button id="export-btn" style="display: none; margin-top: 12px; background: #475569;">
                     <span class="loader"></span>
@@ -339,15 +308,6 @@
         </section>
     </div>
 
-    <!-- Right Card -->
-    <div id="raw-edit-container" class="card" style="flex: 1; display: none; flex-direction: column; overflow-x: hidden;">
-        <header style="text-align: left; margin-bottom: 16px;">
-            <h2 style="font-size: 1.2rem; font-weight: 600;">Raw JSON View</h2>
-            <p class="subtitle">Directly edit the full document</p>
-        </header>
-        <textarea id="raw-json-textarea" style="width: 100%; flex: 1; background: rgba(15, 23, 42, 0.6); border: 1px solid var(--border); border-radius: 12px; color: var(--text); font-family: monospace; font-size: 0.9rem; padding: 12px; margin-top: 8px; resize: none;"></textarea>
-        <button id="apply-raw-btn" style="width: auto; padding: 8px 16px; background: #475569; font-size: 0.9rem; margin-top: 16px;">Apply Changes</button>
-    </div>
 </main>
 
 <script>
@@ -362,6 +322,7 @@
     const settingsSection = document.getElementById('settings-section');
     console.log('Initial settingsSection lookup:', settingsSection);
     const settingsToggle = document.getElementById('settings-toggle');
+    const settingsCloseBtn = document.getElementById('settings-close-btn');
     console.log('Initial settingsToggle lookup:', settingsToggle);
     const apiKeyInput = document.getElementById('settings-api-key');
     const projectIdInput = document.getElementById('settings-project-id');
@@ -382,28 +343,18 @@
     const fieldsContainer = document.getElementById('fields-container');
     const userDisplay = document.getElementById('user-display');
     const patchBtn = document.getElementById('patch-btn');
-    const uploadBtn = document.getElementById('upload-btn');
     const saveStatus = document.getElementById('save-status');
     const switchUserBtn = document.getElementById('switch-user-btn');
     const importBtn = document.getElementById('import-btn');
     const fileInput = document.getElementById('file-input');
     const deleteBtn = document.getElementById('delete-btn');
-    const rawEditContainer = document.getElementById('raw-edit-container');
-    const rawJsonTextarea = document.getElementById('raw-json-textarea');
-    const applyRawBtn = document.getElementById('apply-raw-btn');
-
-    // Initialize CodeMirror
-    const editor = CodeMirror.fromTextArea(rawJsonTextarea, {
-        mode: "application/json",
-        lineNumbers: true,
-        theme: "material-darker",
-        lineWrapping: true
-    });
 
     // App State
     let authToken = null;
     let playFabID = null;
     let currentDocData = null;
+    let fetchedDocData = null;
+    let isImportedMode = false;
 
     // Initialize
     document.addEventListener('DOMContentLoaded', async () => {
@@ -428,6 +379,7 @@
                     authSection.style.display = 'none';
                     dataSection.style.display = 'flex';
                     showStatus(authStatus, 'Auto-login successful!', 'success');
+                    fetchBtn.click();
                 } catch (e) {
                     showStatus(authStatus, 'Auto-login failed: ' + e.message, 'error');
                 } finally {
@@ -576,6 +528,8 @@
                     updatedFields[key] = { integerValue: parseInt(fieldsToUpdate[key]) };
                 } else if (originalField.doubleValue !== undefined) {
                     updatedFields[key] = { doubleValue: parseFloat(fieldsToUpdate[key]) };
+                } else if (originalField.timestampValue !== undefined) {
+                    updatedFields[key] = { timestampValue: fieldsToUpdate[key] };
                 } else {
                     updatedFields[key] = { stringValue: fieldsToUpdate[key] };
                 }
@@ -613,6 +567,8 @@
                     updatedFields[key] = { integerValue: parseInt(fieldsToUpdate[key]) };
                 } else if (originalField.doubleValue !== undefined) {
                     updatedFields[key] = { doubleValue: parseFloat(fieldsToUpdate[key]) };
+                } else if (originalField.timestampValue !== undefined) {
+                    updatedFields[key] = { timestampValue: fieldsToUpdate[key] };
                 } else {
                     updatedFields[key] = { stringValue: fieldsToUpdate[key] };
                 }
@@ -675,7 +631,7 @@
         showStatus(addUserStatus, 'Verifying...', 'success');
         
         try {
-            await login(email, password);
+            const authData = await login(email, password);
             const users = JSON.parse(localStorage.getItem('ttt_users') || '[]');
             if (!users.find(u => u.email === email)) {
                 users.push({ email, password });
@@ -687,6 +643,18 @@
                 
                 newUserEmail.value = '';
                 newUserPassword.value = '';
+                
+                userSelector.value = email;
+                localStorage.setItem('ttt_selected_user', email);
+                settingsSection.style.display = 'none';
+                
+                authToken = authData.idToken;
+                playFabID = extractPlayFabId(authToken) || 'A66DEE83B8F5838A';
+                userDisplay.textContent = `User: ${email}`;
+                
+                authSection.style.display = 'none';
+                dataSection.style.display = 'flex';
+                fetchBtn.click();
             } else {
                 showStatus(addUserStatus, 'User already exists', 'error');
             }
@@ -700,16 +668,13 @@
     console.log('Adding listener to settingsToggle:', settingsToggle);
     settingsToggle.addEventListener('click', () => {
         console.log('Settings toggle clicked');
-        const currentDisplay = window.getComputedStyle(settingsSection).display;
-        console.log('Current display computed:', currentDisplay);
-        
-        const debugStatus = document.getElementById('debug-status');
-        if (debugStatus) {
-            debugStatus.textContent = `Current: ${currentDisplay}, Setting to: ${currentDisplay === 'none' ? 'block' : 'none'}`;
-        }
-        
-        settingsSection.style.display = currentDisplay === 'none' ? 'block' : 'none';
-        console.log('Display set to:', settingsSection.style.display);
+        settingsSection.style.display = 'block';
+        settingsToggle.style.display = 'none';
+    });
+
+    settingsCloseBtn.addEventListener('click', () => {
+        settingsSection.style.display = 'none';
+        settingsToggle.style.display = 'block';
     });
 
     userSelector.addEventListener('change', (e) => {
@@ -741,6 +706,7 @@
             showStatus(authStatus, 'Login successful!', 'success');
             authSection.style.display = 'none';
             dataSection.style.display = 'flex';
+            fetchBtn.click();
             
         } catch (error) {
             showStatus(authStatus, error.message, 'error');
@@ -752,7 +718,6 @@
     switchUserBtn.addEventListener('click', () => {
         dataSection.style.display = 'none';
         authSection.style.display = 'block';
-        rawEditContainer.style.display = 'none';
         deleteBtn.style.display = 'none';
         document.querySelector('main').style.maxWidth = '500px';
         showStatus(authStatus, 'Please log in with a different user', 'success');
@@ -765,17 +730,17 @@
         
         try {
             currentDocData = await fetchDoc(authToken, playFabID);
-            renderFields(currentDocData.fields);
+            fetchedDocData = JSON.parse(JSON.stringify(currentDocData));
+            renderFields(currentDocData.fields, fetchedDocData.fields);
+            
+            isImportedMode = false;
+            patchBtn.querySelector('.btn-text').textContent = 'Patch';
             
             fieldsContainer.style.display = 'block';
             patchBtn.style.display = 'block';
-            uploadBtn.style.display = 'block';
             exportBtn.style.display = 'block';
             importBtn.style.display = 'block';
             deleteBtn.style.display = 'block';
-            rawEditContainer.style.display = 'flex';
-            document.querySelector('main').style.maxWidth = '1400px';
-            editor.setValue(JSON.stringify(sortDocumentFields(currentDocData), null, 2));
             
         } catch (error) {
             alert(`Failed to fetch: ${error.message}`);
@@ -784,19 +749,24 @@
         }
     });
 
-    function renderFields(fields) {
+    function renderFields(fields, originalFields = null) {
         fieldsContainer.innerHTML = '';
         CONFIGURABLE_FIELDS.forEach(fieldKey => {
             const fieldData = fields[fieldKey];
+            const origFieldData = originalFields ? originalFields[fieldKey] : fieldData;
             if (fieldData) {
                 const val = fieldData.doubleValue !== undefined ? fieldData.doubleValue : 
                             (fieldData.stringValue !== undefined ? fieldData.stringValue : 
                             (fieldData.integerValue !== undefined ? fieldData.integerValue : 'N/A'));
                 
+                const origVal = origFieldData && origFieldData.doubleValue !== undefined ? origFieldData.doubleValue : 
+                               (origFieldData && origFieldData.stringValue !== undefined ? origFieldData.stringValue : 
+                               (origFieldData && origFieldData.integerValue !== undefined ? origFieldData.integerValue : 'N/A'));
+                
                 const div = document.createElement('div');
                 div.className = 'form-group';
                 div.innerHTML = `
-                    <label for="field-${fieldKey}">${fieldKey} <span style="font-size: 0.8rem; color: var(--text-muted); font-weight: 400;">(Original: ${val})</span></label>
+                    <label for="field-${fieldKey}">${fieldKey} <span style="font-size: 0.8rem; color: var(--text-muted); font-weight: 400;">(Original: ${origVal})</span></label>
                     <input type="text" id="field-${fieldKey}" value="${val}" data-key="${fieldKey}">
                 `;
                 fieldsContainer.appendChild(div);
@@ -805,17 +775,13 @@
     }
 
     patchBtn.addEventListener('click', async () => {
-        await handleSave(true);
-    });
-
-    uploadBtn.addEventListener('click', async () => {
-        await handleSave(false);
+        await handleSave(!isImportedMode);
     });
 
     async function handleSave(isPatch) {
         if (!authToken || !playFabID || !currentDocData) return;
         
-        const btn = isPatch ? patchBtn : uploadBtn;
+        const btn = patchBtn;
         setLoading(btn, true);
         showStatus(saveStatus, '', '');
         
@@ -827,6 +793,10 @@
             }
         });
         
+        const nowUTC = new Date().toISOString();
+        fieldsToUpdate['LastCloudSaveTime'] = nowUTC;
+        fieldsToUpdate['EventLastResearchTime'] = nowUTC;
+        
         try {
             if (isPatch) {
                 await patchDoc(authToken, playFabID, fieldsToUpdate, currentDocData);
@@ -836,27 +806,17 @@
             showStatus(saveStatus, 'Update successful!', 'success');
             
             currentDocData = await fetchDoc(authToken, playFabID);
-            renderFields(currentDocData.fields);
+            fetchedDocData = JSON.parse(JSON.stringify(currentDocData));
+            renderFields(currentDocData.fields, fetchedDocData.fields);
+            
+            isImportedMode = false;
+            patchBtn.querySelector('.btn-text').textContent = 'Patch';
         } catch (error) {
             showStatus(saveStatus, error.message, 'error');
         } finally {
             setLoading(btn, false);
         }
     }
-
-    applyRawBtn.addEventListener('click', () => {
-        try {
-            const parsedData = JSON.parse(editor.getValue());
-            if (parsedData && parsedData.fields) {
-                currentDocData = parsedData;
-                showStatus(saveStatus, 'Raw JSON applied successfully!', 'success');
-            } else {
-                showStatus(saveStatus, 'Invalid JSON format. Expected Firestore document with fields.', 'error');
-            }
-        } catch (error) {
-            showStatus(saveStatus, 'Failed to parse JSON: ' + error.message, 'error');
-        }
-    });
 
     importBtn.addEventListener('click', () => {
         fileInput.click();
@@ -878,13 +838,10 @@
             
             fieldsContainer.style.display = 'none';
             patchBtn.style.display = 'none';
-            uploadBtn.style.display = 'none';
             exportBtn.style.display = 'none';
             importBtn.style.display = 'none';
             deleteBtn.style.display = 'none';
-            rawEditContainer.style.display = 'none';
             document.querySelector('main').style.maxWidth = '500px';
-            editor.setValue('{}');
         } catch (error) {
             showStatus(saveStatus, error.message, 'error');
         } finally {
@@ -902,7 +859,11 @@
                 const parsedData = JSON.parse(event.target.result);
                 if (parsedData && parsedData.fields) {
                     currentDocData = parsedData;
-                    renderFields(currentDocData.fields);
+                    renderFields(currentDocData.fields, fetchedDocData ? fetchedDocData.fields : currentDocData.fields);
+                    
+                    isImportedMode = true;
+                    patchBtn.querySelector('.btn-text').textContent = 'Upload All';
+                    
                     showStatus(saveStatus, 'JSON imported successfully! You can now edit and push to Firestore.', 'success');
                 } else {
                     showStatus(saveStatus, 'Invalid JSON format. Expected Firestore document with fields.', 'error');
@@ -936,17 +897,19 @@
     });
 
     function sortDocumentFields(doc) {
-        if (!doc || !doc.fields) return doc;
-        
-        const sortedFields = {};
-        Object.keys(doc.fields).sort().forEach(key => {
-            sortedFields[key] = doc.fields[key];
-        });
-        
-        return {
-            ...doc,
-            fields: sortedFields
-        };
+        function deepSort(obj) {
+            if (Array.isArray(obj)) {
+                return obj.map(deepSort);
+            } else if (obj !== null && typeof obj === 'object') {
+                const sortedObj = {};
+                Object.keys(obj).sort().forEach(key => {
+                    sortedObj[key] = deepSort(obj[key]);
+                });
+                return sortedObj;
+            }
+            return obj;
+        }
+        return deepSort(doc);
     }
 
     clearAllBtn.addEventListener('click', () => {
